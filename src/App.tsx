@@ -1,6 +1,12 @@
 /* eslint-disable react/jsx-props-no-spreading */
 // import React from "react"; // eslint-disable-line
-import React, { useState, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  ReactNode,
+  useCallback,
+} from "react";
 import { styled, createTheme, ThemeProvider } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -22,8 +28,9 @@ import Paper from "@mui/material/Paper";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import MapGL, { Source, Layer, LayerProps } from "react-map-gl";
-// import * as _ from "lodash";
-// import { MenuItem, Select } from "@mui/material";
+import * as _ from "lodash";
+import { MenuItem, Select, SelectChangeEvent } from "@mui/material";
+import { Outlook, SevereWeatherTypes } from "@mjohnsey/weather.js";
 
 const MAPBOX_TOKEN =
   "pk.eyJ1IjoibWpvaG5zZXkiLCJhIjoiY2t1aXdmZ2c4MnJ6NDJxbnpzcDIxdXFsZiJ9.6o6cmSKcdhnCRqbPlpcVkQ";
@@ -55,6 +62,20 @@ const drawerWidth = 240;
 
 interface AppBarProps extends MuiAppBarProps {
   open?: boolean;
+}
+
+class HoverInfo {
+  public x: number;
+
+  public y: number;
+
+  public severeType: string;
+
+  constructor(x: number, y: number, severeType: string) {
+    this.x = x;
+    this.y = y;
+    this.severeType = severeType;
+  }
 }
 
 const AppBar = styled(MuiAppBar, {
@@ -109,16 +130,19 @@ enum SpcColors {
   TSTM = "#90EE90",
 }
 
-const spcLayers = [
-  {
-    id: "day1",
-    url: "https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson",
-  },
-  {
-    id: "day2",
-    url: "https://www.spc.noaa.gov/products/outlook/day2otlk_cat.nolyr.geojson",
-  },
-];
+const relevantOutlooks = _.filter(Outlook.getOutlooks(), (outlook) => {
+  if (outlook.day === 1 || outlook.day === 2) {
+    if (outlook.outlookType.weatherType === SevereWeatherTypes.GENERAL) {
+      return true;
+    }
+  }
+  return false;
+});
+
+const spcLayers = _.map(relevantOutlooks, (outlook) => ({
+  id: outlook.id(),
+  url: `https://spc-checker-api.mjohnsey.workers.dev/proxiedFetch/${outlook.id()}`,
+}));
 
 function DashboardContent() {
   const [open, setOpen] = React.useState(false);
@@ -136,24 +160,49 @@ function DashboardContent() {
     width: "1100px",
     height: "700px",
   });
-  // const [selectedLayerId, setSelectedLayerId] = useState("day1");
-  // const [selectedLayer, setSelectedLayer] = useState(
-  //   spcLayers[_.findIndex(spcLayers, { id: selectedLayerId })]
-  // );
-
-  const [selectedLayer, setSelectedLayer] = useState(spcLayers[0]);
+  const [selectedLayerId, setSelectedLayerId] = useState(spcLayers[0].id);
+  const [selectedLayer, setSelectedLayer] = useState(
+    spcLayers[_.findIndex(spcLayers, { id: selectedLayerId })]
+  );
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   useEffect(() => {
     fetch(selectedLayer.url)
       .then((resp) => resp.json())
       .then((json) => setAllData(json));
-  }, []);
+  }, [selectedLayer]);
 
-  // useEffect(() => {
-  //   setSelectedLayer(
-  //     spcLayers[_.findIndex(spcLayers, { id: selectedLayerId })]
-  //   );
-  // });
+  useEffect(() => {
+    setSelectedLayer(
+      spcLayers[_.findIndex(spcLayers, { id: selectedLayerId })]
+    );
+  });
+
+  const handleLayerChange = (
+    event: SelectChangeEvent<string>,
+    child: ReactNode
+  ) => {
+    setSelectedLayerId(event.target.value);
+  };
+
+  const onHover = useCallback((event) => {
+    const {
+      features,
+      srcEvent: { offsetX, offsetY },
+    } = event;
+    const hoveredFeature = features && features[0];
+    if (hoveredFeature) {
+      const { properties } = hoveredFeature;
+      const { LABEL } = properties;
+      let severeType = "Other";
+      if (LABEL) {
+        severeType = LABEL;
+      }
+      setHoverInfo(new HoverInfo(offsetX, offsetY, severeType));
+    } else {
+      setHoverInfo(null);
+    }
+  }, []);
 
   const data = useMemo(() => allData, [allData]);
 
@@ -245,6 +294,13 @@ function DashboardContent() {
           <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
             <Grid container spacing={3}>
               <Grid item xl={12}>
+                <Select value={selectedLayerId} onChange={handleLayerChange}>
+                  {spcLayers.map((layer) => (
+                    <MenuItem key={layer.id} value={layer.id}>
+                      {layer.id}
+                    </MenuItem>
+                  ))}
+                </Select>
                 <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
                   <MapGL
                     // eslint-disable-next-line react/jsx-props-no-spreading
@@ -253,10 +309,31 @@ function DashboardContent() {
                     onViewportChange={setViewport}
                     mapboxApiAccessToken={MAPBOX_TOKEN}
                     interactiveLayerIds={["data"]}
+                    onHover={onHover}
                   >
                     <Source type="geojson" data={data}>
                       <Layer {...dataLayer} />
                     </Source>
+                    {hoverInfo !== null && hoverInfo.severeType && (
+                      <div
+                        className="tooltip"
+                        style={{
+                          left: hoverInfo.x,
+                          top: hoverInfo.y,
+                          position: "absolute",
+                          margin: "8px",
+                          padding: "4px",
+                          background: "rgba(0, 0, 0, 0.8)",
+                          color: "#fff",
+                          maxWidth: "300px",
+                          fontSize: "10px",
+                          zIndex: 9,
+                          pointerEvents: "none",
+                        }}
+                      >
+                        <div>{hoverInfo.severeType}</div>
+                      </div>
+                    )}
                   </MapGL>
                 </Paper>
               </Grid>
