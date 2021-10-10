@@ -57,7 +57,7 @@ function Copyright() {
   );
 }
 
-const drawerWidth = 240;
+const drawerWidth = 200;
 
 interface AppBarProps extends MuiAppBarProps {
   open?: boolean;
@@ -141,7 +141,8 @@ const relevantOutlooks = _.filter(Outlook.getOutlooks(), (outlook) => {
 const spcLayers = _.map(relevantOutlooks, (outlook) => ({
   id: outlook.id(),
   name: outlook.name(),
-  url: `https://spc-checker-api.mjohnsey.workers.dev/proxiedFetch/${outlook.id()}`,
+  geoJsonUrl: `https://spc-checker-api.mjohnsey.workers.dev/proxiedFetch/${outlook.id()}`,
+  webUrl: outlook.webUrl(),
 }));
 
 function DashboardContent() {
@@ -167,7 +168,7 @@ function DashboardContent() {
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   useEffect(() => {
-    fetch(selectedLayer.url)
+    fetch(selectedLayer.geoJsonUrl)
       .then((resp) => resp.json())
       .then((json) => setAllData(json));
   }, [selectedLayer]);
@@ -201,6 +202,13 @@ function DashboardContent() {
       setHoverInfo(new HoverInfo(offsetX, offsetY, severeType));
     } else {
       setHoverInfo(null);
+    }
+  }, []);
+
+  const onClick = useCallback((event) => {
+    const feature = event.features && event.features[0];
+    if (feature) {
+      window.open(selectedLayer.webUrl, "_blank");
     }
   }, []);
 
@@ -310,6 +318,7 @@ function DashboardContent() {
                     mapboxApiAccessToken={MAPBOX_TOKEN}
                     interactiveLayerIds={["data"]}
                     onHover={onHover}
+                    onClick={onClick}
                   >
                     <Source type="geojson" data={data}>
                       <Layer {...dataLayer} />
