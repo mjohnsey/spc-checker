@@ -141,6 +141,7 @@ const relevantOutlooks = _.filter(Outlook.getOutlooks(), (outlook) => {
 
 const spcLayers = _.map(relevantOutlooks, (outlook) => ({
   id: outlook.id(),
+  name: outlook.name(),
   url: `https://spc-checker-api.mjohnsey.workers.dev/proxiedFetch/${outlook.id()}`,
 }));
 
@@ -297,7 +298,7 @@ function DashboardContent() {
                 <Select value={selectedLayerId} onChange={handleLayerChange}>
                   {spcLayers.map((layer) => (
                     <MenuItem key={layer.id} value={layer.id}>
-                      {layer.id}
+                      {_.startCase(_.lowerCase(layer.name))}
                     </MenuItem>
                   ))}
                 </Select>
