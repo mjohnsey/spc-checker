@@ -57,6 +57,16 @@ function Copyright() {
   );
 }
 
+function Acknowledgements() {
+  return (
+    <Typography variant="body2" color="text.secondary" align="center">
+      {"Data provided by "}
+      <Link color="inherit" href="https://spc.noaa.gov">
+        NOAA SPC
+      </Link>{" "}
+    </Typography>
+  );
+}
 const drawerWidth = 200;
 
 interface AppBarProps extends MuiAppBarProps {
@@ -347,6 +357,7 @@ function DashboardContent() {
                 </Paper>
               </Grid>
             </Grid>
+            <Acknowledgements />
             <Copyright />
           </Container>
         </Box>
